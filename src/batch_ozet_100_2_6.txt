@@ -1,0 +1,19 @@
+BATCH & ROTA OZETI — Senaryo 100_2_6 | Seed 42
+============================================================
+Siparis: 100 | Batch: 3 | Kapasite: 100.0 WU
+Batching: First-Fit | Routing: S-Shape + Manhattan
+
+Toplam rota mesafesi: 2262.0 LU
+
+Batch  1: O_1, O_2, O_3, O_4, O_5, O_6, O_7, O_8, O_9, O_10, O_11, O_12, O_13, O_14, O_15, O_16, O_17, O_18, O_19, O_20, O_21, O_22, O_23, O_24, O_25, O_26, O_27, O_28, O_29, O_30, O_31, O_32, O_33, O_34, O_36, O_46, O_63
+  Agirlik : 99.99 WU | Doluluk: %100 | Mesafe: 754 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K7, K8, K9
+
+Batch  2: O_35, O_37, O_38, O_39, O_40, O_41, O_42, O_43, O_44, O_45, O_47, O_48, O_49, O_50, O_51, O_52, O_53, O_54, O_55, O_56, O_57, O_58, O_59, O_60, O_61, O_62, O_64, O_65, O_66
+  Agirlik : 99.81 WU | Doluluk: %100 | Mesafe: 754 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K7, K8, K9
+
+Batch  3: O_67, O_68, O_69, O_70, O_71, O_72, O_73, O_74, O_75, O_76, O_77, O_78, O_79, O_80, O_81, O_82, O_83, O_84, O_85, O_86, O_87, O_88, O_89, O_90, O_91, O_92, O_93, O_94, O_95, O_96, O_97, O_98, O_99, O_100
+  Agirlik : 98.04 WU | Doluluk: %98 | Mesafe: 754 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K7, K8, K9
+
