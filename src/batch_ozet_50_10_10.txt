@@ -1,0 +1,43 @@
+BATCH & ROTA OZETI — Senaryo 50_10_10 | Seed 42
+============================================================
+Siparis: 50 | Batch: 9 | Kapasite: 100.0 WU
+Batching: First-Fit | Routing: S-Shape + Manhattan
+
+Toplam rota mesafesi: 4480.0 LU
+
+Batch  1: O_1, O_2, O_3, O_4, O_5, O_6, O_7, O_16, O_20, O_25
+  Agirlik : 99.62 WU | Doluluk: %100 | Mesafe: 570 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K8
+
+Batch  2: O_8, O_9, O_10, O_11, O_12, O_13, O_22
+  Agirlik : 98.97 WU | Doluluk: %99 | Mesafe: 622 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K7, K8
+
+Batch  3: O_14, O_15, O_17, O_23, O_43
+  Agirlik : 97.07 WU | Doluluk: %97 | Mesafe: 382 LU
+  Koridor : K1, K2, K3, K4, K6
+
+Batch  4: O_18, O_19, O_21, O_24, O_26, O_27
+  Agirlik : 97.32 WU | Doluluk: %97 | Mesafe: 378 LU
+  Koridor : K1, K2, K3, K4, K5
+
+Batch  5: O_28, O_29, O_30, O_31, O_32
+  Agirlik : 94.43 WU | Doluluk: %94 | Mesafe: 602 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K7, K8
+
+Batch  6: O_33, O_34, O_35, O_36, O_37, O_39
+  Agirlik : 93.52 WU | Doluluk: %94 | Mesafe: 498 LU
+  Koridor : K1, K2, K3, K4, K8, K9
+
+Batch  7: O_38, O_40, O_41, O_46
+  Agirlik : 98.40 WU | Doluluk: %98 | Mesafe: 526 LU
+  Koridor : K1, K2, K3, K5, K6, K8
+
+Batch  8: O_42, O_44, O_45, O_47, O_48
+  Agirlik : 90.69 WU | Doluluk: %91 | Mesafe: 570 LU
+  Koridor : K1, K2, K3, K4, K5, K6, K8
+
+Batch  9: O_49, O_50
+  Agirlik : 40.64 WU | Doluluk: %41 | Mesafe: 332 LU
+  Koridor : K1, K2, K4, K5
+
