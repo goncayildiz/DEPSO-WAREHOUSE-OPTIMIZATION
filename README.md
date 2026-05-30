@@ -7,7 +7,13 @@
 ![Scenarios](https://img.shields.io/badge/Scenarios-35-green)
 ![Validation](https://img.shields.io/badge/Validation-1400%20simulations-success)
 ---
+## 🚀 Live Demo
 
+You can test the application live in your browser using the link below:
+
+🔗 [Depso Warehouse Optimization - Streamlit App](https://depso-warehouse-optimization-i8c5cjyrkrczbgwtjufice.streamlit.app/)
+
+---
 ## Overview
 
 This project implements and validates the **DEPSO (Discrete Evolutionary Particle Swarm Optimization)** algorithm for the joint warehouse optimization problem. The implementation reproduces the complete experimental setup of Kübler et al. (2020) in Python, covering:
