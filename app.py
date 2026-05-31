@@ -146,6 +146,11 @@ with tab_run:
                 orders,
                 utils.locations_cache,
             )
+            depso_distance = float(depso_distance)
+            sop_distance = float(sop_distance)
+            fcfs_distance = float(fcfs_distance)
+            savings_distance = float(savings_distance)
+
 
             st.session_state["orders"] = orders
             st.session_state["batches"] = batches
