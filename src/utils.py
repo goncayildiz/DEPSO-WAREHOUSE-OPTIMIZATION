@@ -487,3 +487,360 @@ def calculate_savings_distance(orders, locations_objects):
         # Route distance - int() cast işlemi ile numpy.int16 sınırları standart int'e taşındı 🚀
         total_dist += int(calculate_route_distance(route))
     return total_dist
+
+"""
+pg_depso_final_v2.py
+====================
+PG-DEPSO — Tüm 13 problemden kod gerektiren 9 fix uygulandı.
+
+Fix 1:  Stable order_id_to_idx (Problem 3)
+Fix 2:  update_pheromone uses g_best.batches (Problem 4)
+Fix 3:  apply_mutation_pg + local_search_pg (Problems 5, 6)
+Fix 4:  Spatial closeness_score (Problem 10)
+Fix 5:  TAU_MAX + normalization (Problems 8, 9)
+Fix 6:  Store g_best.routes, return stored best (Problem 7)  ← YENİ
+Fix 7:  Improvement-aware reward delta (Problem 11)          ← YENİ
+
+- calculate_fitness_pg_full routes hesaplamıyor (darboğaz buydu)
+- routes sadece final output'ta bir kez hesaplanıyor
+- [list(b) for b in batches] kopyası sadece gbest güncellenince yapılıyor
+- get_closeness_score hızlı versiyon korunuyor
+ 
+
+"""
+
+import numpy as np
+from itertools import combinations
+ 
+# ==========================================
+# SABİTLER
+# ==========================================
+TAU_0    = 0.1
+TAU_MIN  = 0.001
+TAU_MAX  = 10.0
+RHO      = 0.95
+ALPHA_PG = 0.5
+BETA_PG  = 0.2
+GAMMA_PG = 0.3
+ 
+ 
+def build_order_idx_map(orders):
+    return {order.id: idx for idx, order in enumerate(orders)}
+ 
+ 
+def init_pheromone(k):
+    return np.ones((k, k), dtype=np.float32) * TAU_0
+ 
+ 
+# ==========================================
+# HIZLI CLOSENESS SKORU
+# ==========================================
+def get_order_repr_loc(order):
+    if not order.lines:
+        return 0
+    best_item = max(order.lines, key=lambda x: item_weights.get(x[0].id, 0))
+    return best_item[0].location_index
+ 
+ 
+def get_closeness_score(order, batch):
+    if not batch:
+        return 0.0
+    o_loc = get_order_repr_loc(order)
+    if o_loc == 0:
+        return 0.0
+    b_locs = [get_order_repr_loc(b) for b in batch if b.lines]
+    if not b_locs:
+        return 0.0
+    avg_dist = sum(float(dist_matrix[o_loc][bl]) for bl in b_locs) / len(b_locs)
+    return 1.0 / (1.0 + avg_dist)
+ 
+ 
+# ==========================================
+# PHEROMONE SKORU
+# ==========================================
+def get_pheromone_score(order, batch, pheromone, order_idx_map):
+    if not batch:
+        return 0.0
+    i = order_idx_map.get(order.id, -1)
+    if i < 0:
+        return 0.0
+    scores = []
+    for b_order in batch:
+        j = order_idx_map.get(b_order.id, -1)
+        if j >= 0:
+            scores.append(float(pheromone[i][j]))
+    raw = sum(scores) / len(scores) if scores else 0.0
+    return raw / TAU_MAX
+ 
+ 
+# ==========================================
+# BATCH ATAMA
+# ==========================================
+def first_fit_pg(permutation, pheromone, order_idx_map,
+                  alpha=ALPHA_PG, beta=BETA_PG, gamma=GAMMA_PG):
+    batches       = []
+    batch_weights = []
+    for order in permutation:
+        w = get_order_weight(order)
+        best_idx   = -1
+        best_score = -1.0
+        for b_idx in range(len(batches)):
+            if batch_weights[b_idx] + w <= CAPACITY:
+                ph    = get_pheromone_score(order, batches[b_idx], pheromone, order_idx_map)
+                util  = (batch_weights[b_idx] + w) / CAPACITY
+                clos  = get_closeness_score(order, batches[b_idx])
+                score = alpha * ph + beta * util + gamma * clos
+                if score > best_score:
+                    best_score = score
+                    best_idx   = b_idx
+        if best_idx >= 0:
+            batches[best_idx].append(order)
+            batch_weights[best_idx] += w
+        else:
+            batches.append([order])
+            batch_weights.append(w)
+    return batches
+ 
+ 
+# ==========================================
+# FITNESS — sadece distance + batches döndürür
+# routes YOK — darboğaz buydu
+# ==========================================
+def calculate_fitness_pg(permutation, pheromone, order_idx_map,
+                           alpha=ALPHA_PG, beta=BETA_PG, gamma=GAMMA_PG):
+    """
+    Runtime optimizasyonu: routes hesaplanmıyor.
+    get_cached_route_dist zaten cache'li NN+2opt yapıyor.
+    routes sadece final output'ta bir kez hesaplanır.
+    """
+    batches = first_fit_pg(permutation, pheromone, order_idx_map,
+                            alpha, beta, gamma)
+    total   = 0
+    for batch in batches:
+        locs   = unique_locations(batch)
+        total += get_cached_route_dist(locs)
+    return total, batches
+ 
+ 
+# ==========================================
+# PHEROMONE GÜNCELLEME
+# ==========================================
+def update_pheromone_pg(best_batches, best_fitness, pheromone,
+                         q, order_idx_map, old_best=None):
+    if old_best is not None and old_best > 0:
+        improvement_rate = max((old_best - best_fitness) / old_best, 0.0)
+    else:
+        improvement_rate = 0.0
+    delta = (q / (best_fitness + 1e-9)) * (1.0 + improvement_rate)
+    for batch in best_batches:
+        if len(batch) < 2:
+            continue
+        for o1, o2 in combinations(batch, 2):
+            i = order_idx_map.get(o1.id, -1)
+            j = order_idx_map.get(o2.id, -1)
+            if i >= 0 and j >= 0:
+                pheromone[i][j] += delta
+                pheromone[j][i] += delta
+    np.clip(pheromone, TAU_MIN, TAU_MAX, out=pheromone)
+ 
+ 
+def evaporate_pg(pheromone, rho=RHO):
+    pheromone *= rho
+    np.clip(pheromone, TAU_MIN, TAU_MAX, out=pheromone)
+ 
+ 
+# ==========================================
+# MUTASYON
+# ==========================================
+def apply_mutation_pg(particles, g_best, pheromone, order_idx_map,
+                       alpha=ALPHA_PG, beta=BETA_PG, gamma=GAMMA_PG):
+    intensities = []
+    for p in particles:
+        d1 = calculate_difference(p.pos, p.best_pos)
+        d2 = calculate_difference(p.pos, g_best.pos)
+        d3 = calculate_difference(p.best_pos, g_best.pos)
+        intensities.append((d1 + d2 + d3) / 3.0)
+    int_max = max(intensities)
+    int_min = min(intensities)
+    for idx, p in enumerate(particles):
+        m_prob = (
+            (int_max - intensities[idx]) / (int_max - int_min)
+            if int_max != int_min else 1.0
+        )
+        if random.random() < m_prob:
+            td_max = max(p2.fitness for p2 in particles)
+            cl_p   = (
+                (p.fitness - g_best.fitness) / (td_max - g_best.fitness)
+                if td_max != g_best.fitness else 0.0
+            )
+            if cl_p < 0.5:
+                i, j = random_two_indices(len(p.pos))
+                p.pos[i], p.pos[j] = p.pos[j], p.pos[i]
+            elif cl_p < 0.8:
+                i, j = random_two_indices(len(p.pos))
+                p.pos.insert(j, p.pos.pop(i))
+            else:
+                i, j = sorted(random_two_indices(len(p.pos)))
+                p.pos[i:j+1] = p.pos[i:j+1][::-1]
+            vi, vj = random_two_indices(len(p.pos))
+            p.vel[vi] = random.choice([-1, 0, 1])
+            p.vel[vj] = random.choice([-1, 0, 1])
+            p.fitness, p.batches = calculate_fitness_pg(
+                p.pos, pheromone, order_idx_map, alpha, beta, gamma)
+            if p.fitness < p.best_fitness:
+                p.best_pos     = list(p.pos)
+                p.best_fitness = p.fitness
+                p.best_batches = p.batches  # referans — kopyalama yok
+ 
+ 
+# ==========================================
+# LOCAL SEARCH
+# ==========================================
+def local_search_pg(g_best, max_ls_iter, particles,
+                     pheromone, order_idx_map,
+                     alpha=ALPHA_PG, beta=BETA_PG, gamma=GAMMA_PG):
+    k_len = len(g_best.pos)
+    for _ in range(max_ls_iter):
+        candidate = list(g_best.pos)
+        i, j = random_two_indices(k_len)
+        candidate[i], candidate[j] = candidate[j], candidate[i]
+        cand_fit, cand_batches = calculate_fitness_pg(
+            candidate, pheromone, order_idx_map, alpha, beta, gamma)
+        if cand_fit < g_best.fitness:
+            g_best.pos          = candidate
+            g_best.fitness      = cand_fit
+            g_best.batches      = cand_batches
+            g_best.best_pos     = list(candidate)
+            g_best.best_fitness = cand_fit
+            g_best.best_batches = cand_batches
+            rand_p = random.choice(particles)
+            rand_p.pos     = list(g_best.pos)
+            rand_p.fitness = g_best.fitness
+            rand_p.batches = g_best.batches
+            if g_best.fitness < rand_p.best_fitness:
+                rand_p.best_pos     = list(g_best.pos)
+                rand_p.best_fitness = g_best.fitness
+                rand_p.best_batches = g_best.best_batches
+            return g_best, 0
+    return g_best, 1
+ 
+ 
+# ==========================================
+# ANA ALGORİTMA
+# ==========================================
+def run_pg_depso_final(orders, num_particles, max_iterations,
+                        threshold_gbest, max_ls_iter, max_stagnation,
+                        v_p=0.5, alpha=ALPHA_PG, beta=BETA_PG,
+                        gamma=GAMMA_PG, rho=RHO):
+    global route_cache
+    route_cache.clear()
+ 
+    k_len         = len(orders)
+    pheromone     = init_pheromone(k_len)
+    order_idx_map = build_order_idx_map(orders)
+    particles     = []
+    convergence_curve = []
+ 
+    for _ in range(num_particles - 1):
+        p = Particle()
+        p.pos = list(orders)
+        random.shuffle(p.pos)
+        p.vel = [random.choice([-1, 0, 1]) for _ in range(k_len)]
+        p.fitness, p.batches = calculate_fitness_pg(
+            p.pos, pheromone, order_idx_map, alpha, beta, gamma)
+        p.best_pos     = list(p.pos)
+        p.best_fitness = p.fitness
+        p.best_batches = p.batches
+        particles.append(p)
+ 
+    sav_p = Particle()
+    sav_p.pos = savings_algorithm(orders)
+    sav_p.vel = [random.choice([-1, 0, 1]) for _ in range(k_len)]
+    sav_p.fitness, sav_p.batches = calculate_fitness_pg(
+        sav_p.pos, pheromone, order_idx_map, alpha, beta, gamma)
+    sav_p.best_pos     = list(sav_p.pos)
+    sav_p.best_fitness = sav_p.fitness
+    sav_p.best_batches = sav_p.batches
+    particles.append(sav_p)
+ 
+    best_p = min(particles, key=lambda p: p.fitness)
+    g_best = clone_particle(best_p)
+    g_best.batches      = best_p.batches
+    g_best.best_batches = best_p.batches
+ 
+    stagnation_counter = 0
+    prev_best_fitness  = g_best.fitness
+    Q = g_best.fitness / 10.0
+ 
+    update_pheromone_pg(
+        g_best.batches, g_best.fitness, pheromone, Q, order_idx_map, old_best=None)
+ 
+    for current_iter in range(1, max_iterations + 1):
+        gbest_updated = False
+ 
+        for p in particles:
+            p.pos, p.vel = particle_movement(
+                p.pos, p.vel, p.best_pos, g_best.pos, threshold_gbest, v_p)
+            p.fitness, p.batches = calculate_fitness_pg(
+                p.pos, pheromone, order_idx_map, alpha, beta, gamma)
+ 
+            if p.fitness < p.best_fitness:
+                p.best_pos     = list(p.pos)
+                p.best_fitness = p.fitness
+                p.best_batches = p.batches
+ 
+            if p.fitness < g_best.fitness:
+                g_best = clone_particle(p)
+                g_best.batches      = p.batches
+                g_best.best_batches = p.batches
+                stagnation_counter  = 0
+                gbest_updated       = True
+ 
+        if not gbest_updated:
+            stagnation_counter += 1
+ 
+        if gbest_updated:
+            update_pheromone_pg(
+                g_best.batches, g_best.fitness, pheromone,
+                Q, order_idx_map, old_best=prev_best_fitness)
+            prev_best_fitness = g_best.fitness
+ 
+        evaporate_pg(pheromone, rho)
+ 
+        apply_mutation_pg(
+            particles, g_best, pheromone, order_idx_map, alpha, beta, gamma)
+ 
+        for p in particles:
+            if p.fitness < g_best.fitness:
+                g_best = clone_particle(p)
+                g_best.batches      = p.batches
+                g_best.best_batches = p.batches
+                stagnation_counter  = 0
+ 
+        adaptive_stag = round(
+            1 + max_stagnation * (max_iterations - current_iter) / max_iterations)
+        if stagnation_counter > adaptive_stag * random.random():
+            g_best, _ = local_search_pg(
+                g_best, max_ls_iter, particles,
+                pheromone, order_idx_map, alpha, beta, gamma)
+            stagnation_counter = 0
+ 
+        convergence_curve.append(g_best.fitness)
+ 
+        patience = 100
+        if len(convergence_curve) > patience:
+            prev = convergence_curve[-patience]
+            curr = convergence_curve[-1]
+            if prev > 0 and (prev - curr) / prev < 0.001:
+                print(f"PG-DEPSO final early stopping at iteration {current_iter}")
+                break
+ 
+    # Final output — routes sadece burada bir kez hesaplanır
+    final_batches = g_best.best_batches
+    final_routes  = []
+    for batch in final_batches:
+        locs  = unique_locations(batch)
+        route = two_opt(nearest_neighbor(locs))
+        final_routes.append(route)
+ 
+    return final_batches, final_routes, g_best.best_fitness, convergence_curve
