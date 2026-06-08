@@ -35,12 +35,16 @@ scenario = st.sidebar.selectbox(
 
 num_orders, max_ol, max_parts = parse_scenario_name(scenario)
 
-seed = st.sidebar.number_input(
-    "Random Seed",
-    min_value=1,
-    max_value=9999,
-    value=42,
-    step=1
+benchmark_instance = st.sidebar.selectbox(
+    "Benchmark Instance",
+    list(range(1, 41)),
+    index=0
+)
+
+seed = int(benchmark_instance)
+
+st.sidebar.caption(
+    "Benchmark Instance corresponds to one of the 40 independent seeds used in the report."
 )
 
 st.sidebar.divider()
