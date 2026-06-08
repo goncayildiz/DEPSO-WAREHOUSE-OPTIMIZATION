@@ -356,9 +356,12 @@ with tab_compare:
                 seed=int(seed),
             )
 
+            algorithm_seed = int(seed) * 100 + 1
+
             # Run standard DEPSO
             # Reset seed so the DEPSO run is reproducible.
-            utils.set_seed(int(seed))
+            utils.route_cache.clear()
+            utils.set_seed(algorithm_seed)
 
             depso_start = time.time()
             depso_batches, depso_routes, depso_distance, depso_conv = utils.run_depso(
@@ -374,7 +377,8 @@ with tab_compare:
 
             # Run PG-DEPSO
             # Reset seed again so the improved algorithm starts from a comparable random state.
-            utils.set_seed(int(seed))
+            utils.route_cache.clear()
+            utils.set_seed(algorithm_seed)
 
             pg_start = time.time()
             pg_batches, pg_routes, pg_distance, pg_conv = utils.run_pg_depso_final(
