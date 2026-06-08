@@ -94,7 +94,7 @@ with tab_overview:
 
     st.info(
         """
-        Recommended demo scenario: 100_2_6 with seed 42.
+        Recommended demo scenario: 100_2_6 with seed 1-40.
         For faster live demonstration, use 100–150 iterations.
         """
     )
