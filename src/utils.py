@@ -84,7 +84,7 @@ def create_distance_matrix(location_list):
     global dist_matrix, locations_cache
     locations_cache = location_list # FIXED: Populate the cache
     n_nodes = len(location_list)
-    dist_matrix = np.zeros((n_nodes, n_nodes), dtype=np.int16)
+    dist_matrix = np.zeros((n_nodes, n_nodes), dtype=np.int64)
     for i in range(n_nodes):
         for j in range(i, n_nodes):
             dist = calculate_distance(location_list[i], location_list[j])
@@ -96,7 +96,12 @@ def create_distance_matrix(location_list):
 # ==========================================
 def calculate_route_distance(tour):
     """CORE FUNCTION: Calculates total distance of a given tour list"""
-    return sum(dist_matrix[tour[i]][tour[i + 1]] for i in range(len(tour) - 1))
+    total = 0
+
+    for i in range(len(tour) - 1):
+        total += int(dist_matrix[tour[i]][tour[i + 1]])
+
+    return int(total)
 
 def get_order_weight(order):
     return sum(item_weights[item.id] * quantity for (item, quantity) in order.lines)
