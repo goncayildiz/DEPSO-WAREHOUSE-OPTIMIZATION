@@ -49,13 +49,16 @@ st.sidebar.caption(
 
 st.sidebar.divider()
 
-num_particles = st.sidebar.slider(
-    "Particles",
-    min_value=5,
-    max_value=15,
-    value=8,
-    step=1
-)
+num_particles = 8
+
+# particles gizlendi, yukarıda direkt sabit değer olarak gösteriyoruz - filtrelerde seçilmesini ve değiştirilmesini istemiyoruz. Rapora uygun olması için sabit 8 seçildi.
+# num_particles = st.sidebar.slider(
+#    "Particles",
+#    min_value=5,
+#    max_value=15,
+#    value=8,
+#    step=1
+# )
 
 max_iterations = st.sidebar.slider(
     "Iterations",
