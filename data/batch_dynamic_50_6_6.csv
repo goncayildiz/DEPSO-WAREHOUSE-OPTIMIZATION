@@ -1,0 +1,6 @@
+Period,DEPSO_Before,DEPSO_After,Diff_LU,Diff_%,Relocations,PairDist_Before,PairDist_After,PairDist_Impr_%,UniqueCooccPairs
+1,278,278,0,0.0,0,0,0,0,435
+2,309,295,-14,-4.53,4,25.33,3.33,86.84,783
+3,453,453,0,0.0,9,5.33,3.92,26.56,1720
+4,355,355,0,0.0,10,4.15,3.77,9.26,2125
+5,411,411,0,0.0,10,3.77,3.69,2.04,2621

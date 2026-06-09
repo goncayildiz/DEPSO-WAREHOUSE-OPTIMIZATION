@@ -6,7 +6,9 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white)
 ![Scenarios](https://img.shields.io/badge/Scenarios-35-green)
 ![Validation](https://img.shields.io/badge/Validation-1400%20simulations-success)
+
 ---
+
 ## 🚀 Live Demo
 
 You can test the application live in your browser using the link below:
@@ -14,6 +16,7 @@ You can test the application live in your browser using the link below:
 🔗 [Depso Warehouse Optimization - Streamlit App](https://depso-warehouse-optimization-i8c5cjyrkrczbgwtjufice.streamlit.app/)
 
 ---
+
 ## Overview
 
 This project implements and validates the **DEPSO (Discrete Evolutionary Particle Swarm Optimization)** algorithm for the joint warehouse optimization problem. The implementation reproduces the complete experimental setup of Kübler et al. (2020) in Python, covering:
@@ -23,6 +26,8 @@ This project implements and validates the **DEPSO (Discrete Evolutionary Particl
 - **Picker routing** (Nearest Neighbor + 2-opt local search)
 
 The benchmark was run across **35 scenarios × 40 independent instances = 1,400 total simulations**, with results validated against the paper's published Appendix H values and an independent external dataset (Foodmart).
+
+The project also includes two original extensions: **PG-DEPSO** (Pheromone-Guided DEPSO), an ACO-PSO hybrid that adds a pheromone memory layer to the batch assignment step, and a **Batch-Based Dynamic Storage Location Assignment** module that feeds DEPSO's own co-batch outputs back into warehouse layout decisions.
 
 ---
 
@@ -51,6 +56,28 @@ DEPSO won **all 27 Foodmart instances** (81/81 comparisons) on a completely inde
 
 > **Total: 186 tests, 186 wins, 0 losses**
 
+### PG-DEPSO Extension (35 Scenarios × 40 Instances)
+
+| Metric | Value |
+|--------|-------|
+| Average gap vs DEPSO | +0.17% |
+| All gaps within band | ±1.2% |
+| Scenarios PG-DEPSO leads | 9 / 35 |
+| NmaxOl=2 scenarios (PG leads) | 5 / 11 (avg −0.11%) |
+| Best single scenario | −1.20% (50_2_10) |
+
+PG-DEPSO demonstrates **statistical parity** with standard DEPSO across all scenarios while achieving a consistent advantage in low-orderline configurations where batch density is highest.
+
+### Batch-Based Dynamic Storage (Proof-of-Concept) // For Future Work
+
+| Scenario | Periods Improved | Avg Effect | Best Single Period |
+|----------|-----------------|------------|--------------------|
+| 200_6_6  | 3 / 5           | −2.33%     | −9.60% (−118 LU)   |
+| 200_10_6 | 3 / 5           | −0.10%     | −7.45% (−158 LU)   |
+| 150_6_6  | 3 / 5           | +0.17%     | −2.90% (−29 LU)    |
+
+The dynamic storage module demonstrates that DEPSO's co-batch outputs carry actionable spatial information — in large scenarios (200 orders, 4 batches), periodic relocation of co-batched item pairs produced measurable travel distance reductions.
+
 ---
 
 ## Algorithm
@@ -72,6 +99,93 @@ for each iteration:
         update pbest, gbest
     if stagnation > patience: stop
 ```
+
+---
+
+## PG-DEPSO — Pheromone-Guided Extension
+
+PG-DEPSO augments DEPSO's batch assignment step with a pheromone memory layer inspired by Ant Colony Optimization (Dorigo et al., 1996).
+
+### Core Mechanism
+
+A **K×K pheromone matrix** (K = number of orders) tracks co-assignment success across iterations. When Gbest improves, co-assigned order pairs are rewarded:
+
+```
+Δτ = (Q / fitness) × (1 + improvement_rate)
+```
+
+Pheromone values evaporate at ρ = 0.95 per iteration and are clipped to [τ_min=0.001, τ_max=10.0].
+
+### Batch Assignment Score
+
+```
+Score(batch) = α × pheromone_norm + β × utilization + γ × closeness
+```
+
+| Component | Weight | Description |
+|-----------|--------|-------------|
+| pheromone_norm | α = 0.5 | Normalized historical co-assignment signal |
+| utilization | β = 0.2 | Batch capacity filling efficiency |
+| closeness | γ = 0.3 | Spatial proximity via warehouse distance |
+
+### Key Implementation Fixes (v1 → v4)
+
+Seven implementation errors were identified and corrected across four iterative versions:
+
+| Fix | Problem Solved |
+|-----|---------------|
+| Stable order_idx_map | Permutation-position indexing accumulated noise instead of signal |
+| Correct batch in reward | update_pheromone used standard First-Fit batches, not PG batches |
+| PG fitness in mutation/local search | Evaluations were inconsistently using standard DEPSO fitness |
+| Spatial closeness score | Batch assignment had no warehouse distance awareness |
+| TAU_MAX + normalization | Pheromone values grew unbounded, dominating the score formula |
+| Store and return best solution | Final output was reconstructed from final pheromone, not stored best |
+| Improvement-aware reward | Reward magnitude was independent of improvement size |
+
+---
+
+## Batch-Based Dynamic Storage Location Assignment
+
+This module closes the feedback loop between DEPSO's optimization output and the physical warehouse layout — addressing the storage location assignment component that the paper's experimental scope deliberately excludes.
+
+### How It Works
+
+```
+Period N:
+  1. Run DEPSO → final_batches produced
+  2. Update co-occurrence matrix from final_batches
+  3. Relocate frequently co-batched item pairs to adjacent storage locations
+  4. Run DEPSO again on same order set with updated locations
+  5. Measure travel distance change (before vs after relocation)
+```
+
+### Anti-Stagnation Design
+
+Three mechanisms prevent the layout from converging to a local optimum:
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| max_relocate_pct | 20% | Max items moved per period — prevents structural disruption |
+| min_cooccurrence | 2 | Minimum co-batch observations before relocation — filters noise |
+| exploration_rate | 15% | Random relocations mixed in — maintains search diversity |
+
+### When It Works Best
+
+The mechanism is most effective in large scenarios with **multiple batches per period** (≥4 batches). When only 1 batch forms per period, all items co-occur trivially and the co-occurrence signal is uninformative.
+
+### Usage
+
+```bash
+# Run batch-based dynamic storage demo (3 scenarios, 5 periods each)
+python src/dynamic_storage_batch.py
+```
+
+Outputs per scenario:
+- Terminal summary: before/after DEPSO distance per period
+- `batch_dynamic_<scenario>.png` — 3-panel chart (before/after bars, % improvement, pair proximity)
+- `../data/batch_dynamic_<scenario>.csv` — full period-level results
+
+> **Note:** This module operates independently of `main.py` to preserve benchmark comparability with paper Appendix H. Item relocations are confined to the module's own runtime and do not persist between runs.
 
 ---
 
@@ -117,19 +231,21 @@ Following Kübler et al. (2020) Figure 7:
 DEPSO-WAREHOUSE-OPTIMIZATION/
 │
 ├── data/
-│   └── DEPSO_Sentetik_Veri_Seti.xlsx    # Synthetic benchmark dataset
+│   └── DEPSO_Sentetik_Veri_Seti.xlsx        # Synthetic benchmark dataset
 │
-├── figures/                              # Generated benchmark figures
+├── figures/                                  # Generated benchmark figures
 │   ├── benchmark_comparison/
 │   ├── convergence_plots/
 │   └── route_visualizations/
 │
 ├── src/
-│   ├── main.py                           # Main benchmark runner
-│   ├── utils.py                          # Core DEPSO algorithm
-│   ├── visualizer.py                     # Benchmark visualizations
-│   ├── batch_visualization_v2.py         # Batch & route visualizations
-│   └── merge_results.py                  # Result aggregation
+│   ├── main.py                               # Main benchmark runner (35 scenarios)
+│   ├── utils.py                              # Core DEPSO algorithm + PG-DEPSO
+│   ├── main_pg_comparison_final.py           # PG-DEPSO vs DEPSO benchmark runner
+│   ├── dynamic_storage_batch.py             # Batch-based dynamic storage module
+│   ├── visualizer.py                         # Benchmark visualizations
+│   ├── batch_visualization_v2.py             # Batch & route visualizations
+│   └── merge_results.py                      # Result aggregation
 │
 ├── requirements.txt
 └── README.md
@@ -166,6 +282,22 @@ python src/main.py
 ```
 
 > ⚠️ Full benchmark takes approximately 4–6 hours on Apple M2 Pro with multiprocessing enabled. Individual scenario runtimes range from ~8 seconds (50_2_6) to ~2,248 seconds (200_10_2).
+
+### Run PG-DEPSO vs DEPSO comparison (35 scenarios × 40 instances)
+
+```bash
+python src/main_pg_comparison_final.py
+```
+
+> ⚠️ Full PG-DEPSO benchmark takes approximately 12 hours. Results saved to `../data/DEPSO_vs_PG_Final.csv`.
+
+### Run batch-based dynamic storage demo
+
+```bash
+python src/dynamic_storage_batch.py
+```
+
+Runs 3 scenarios (200_6_6, 200_10_6, 150_6_6) × 5 periods each. Results saved to `../data/batch_dynamic_<scenario>.csv`.
 
 ### Generate benchmark visualizations
 
